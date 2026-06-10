@@ -117,6 +117,11 @@
       <span class="count-badge" id="countBadge">第 1 次</span>
     </div>
 
+    <div class="surrender-row" id="surrenderRow" style="display:none;margin-bottom:0.75rem">
+      <span class="taunt" id="tauntEmoji">😝</span>
+      <button class="btn-surrender" onclick="surrender()">我认输了</button>
+      <span class="taunt" id="tauntEmoji2">🤪</span>
+    </div>
     <div id="winBanner" style="display:none"></div>
     <div id="categoryBanner" style="display:none" class="hint-banner hint-category"><span class="hint-icon">🏷️</span><span id="categoryText">正在获取分类…</span></div>
     <div id="hintBanner" style="display:none" class="hint-banner hint-clue"><span class="hint-icon">💡</span><span id="hintText"></span></div>
@@ -132,11 +137,7 @@
 
     <div id="guessList" class="guess-list"></div>
     <div class="center"><button class="btn-ghost" onclick="resetGame()">换一局</button></div>
-    <div class="surrender-row" id="surrenderRow" style="display:none">
-      <span class="taunt" id="tauntEmoji">😝</span>
-      <button class="btn-surrender" onclick="surrender()">我认输了</button>
-      <span class="taunt" id="tauntEmoji2">🤪</span>
-    </div>
+  </div>
   </div>
 </div>
 
@@ -343,8 +344,9 @@ async function submitGuess() {
         hintShown = true;
         fetchHint('clue');
       }
-      // 超过25次显示投降按钮
-      if (guesses.length >= 25 && !won) {
+      // 简单模式20次、其他25次显示投降按钮
+      const surrenderAt = difficulty === 'easy' ? 20 : 25;
+      if (guesses.length >= surrenderAt && !won) {
         showSurrenderBtn();
       }
       if (cfg.maxGuesses !== Infinity && guesses.length >= cfg.maxGuesses) {
