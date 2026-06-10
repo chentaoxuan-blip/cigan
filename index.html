@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>词·感应</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', sans-serif; background: #f5f4f0; color: #1a1a1a; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem 4rem; }
+  .game { width: 100%; max-width: 520px; }
+  .header { text-align: center; margin-bottom: 2.5rem; }
+  .header h1 { font-size: 28px; font-weight: 500; letter-spacing: 0.1em; color: #1a1a1a; }
+  .header p { font-size: 13px; color: #888; margin-top: 6px; }
+  .card { background: #fff; border-radius: 14px; border: 0.5px solid #e0deda; padding: 1.25rem; margin-bottom: 1rem; }
+  .label { font-size: 11px; font-weight: 500; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; display: block; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  input[type=text] { flex: 1; height: 40px; padding: 0 12px; border: 0.5px solid #ddd; border-radius: 8px; font-size: 15px; font-family: inherit; color: #1a1a1a; background: #fafaf8; outline: none; transition: border-color 0.15s; }
+  input[type=text]:focus { border-color: #999; background: #fff; }
+  .btn-primary { height: 40px; padding: 0 20px; background: #1a1a1a; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-family: inherit; font-weight: 500; white-space: nowrap; transition: opacity 0.15s; }
+  .btn-primary:hover { opacity: 0.8; }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-ghost { height: 40px; padding: 0 16px; background: transparent; border: 0.5px solid #ccc; border-radius: 8px; font-size: 13px; cursor: pointer; font-family: inherit; color: #444; transition: background 0.15s; }
+  .btn-ghost:hover { background: #f0ede8; }
+  .status-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+  .status-text { font-size: 13px; color: #888; }
+  .count-badge { background: #eee; border-radius: 20px; padding: 3px 11px; font-size: 12px; font-weight: 500; color: #444; }
+  .guess-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 1rem; }
+  .guess-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #fafaf8; border-radius: 10px; border: 0.5px solid #e8e5e0; }
+  .guess-rank { font-size: 11px; color: #bbb; width: 16px; text-align: center; flex-shrink: 0; }
+  .guess-word { font-size: 15px; font-weight: 500; color: #1a1a1a; min-width: 44px; }
+  .bar-wrap { flex: 1; height: 5px; background: #e8e5e0; border-radius: 3px; overflow: hidden; }
+  .bar { height: 100%; border-radius: 3px; transition: width 0.5s cubic-bezier(0.25,0.46,0.45,0.94); }
+  .guess-pct { font-size: 13px; font-weight: 500; min-width: 42px; text-align: right; }
+  .loading-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #fafaf8; border-radius: 10px; font-size: 13px; color: #888; }
+  .spinner { width: 14px; height: 14px; border: 1.5px solid #ddd; border-top-color: #555; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .win-card { background: #f0faf4; border: 0.5px solid #a8dfc0; border-radius: 14px; padding: 1.5rem; text-align: center; margin-bottom: 1rem; }
+  .win-word { font-size: 32px; font-weight: 500; color: #1a7a4a; margin-bottom: 6px; }
+  .win-msg { font-size: 14px; color: #2a9a5a; }
+  .error { font-size: 13px; color: #c0392b; padding: 8px 12px; background: #fdf0ee; border-radius: 8px; margin-bottom: 8px; border: 0.5px solid #f5c6c0; }
+  .setup-row { margin-bottom: 10px; }
+  .center { text-align: center; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<div class="game">
+  <div class="header">
+    <h1>词 · 感应</h1>
+    <p>猜出那个隐藏的两字词 — 每次猜词显示与答案的语义关联度</p>
+  </div>
+
+  <div class="card" id="setupCard">
+    <span class="label">开始游戏</span>
+    <div class="setup-row">
+      <input type="text" id="customAnswer" placeholder="输入答案词考验好友（留空则随机）" maxlength="2" />
+    </div>
+    <div class="row">
+      <button class="btn-primary" onclick="startGame()">随机开始</button>
+      <button class="btn-ghost" onclick="startGameCustom()">用上面的词</button>
+    </div>
+  </div>
+
+  <div id="gameArea" style="display:none">
+    <div class="status-bar">
+      <span class="status-text" id="statusText">猜一个两字词试试</span>
+      <span class="count-badge" id="countBadge">第 1 次</span>
+    </div>
+
+    <div id="winBanner" style="display:none"></div>
+    <div id="errorMsg" style="display:none" class="error"></div>
+
+    <div class="card">
+      <div class="row">
+        <input type="text" id="guessInput" placeholder="输入两字词…" maxlength="2"
+          onkeydown="if(event.key==='Enter')submitGuess()" />
+        <button class="btn-primary" id="guessBtn" onclick="submitGuess()">猜</button>
+      </div>
+    </div>
+
+    <div id="guessList" class="guess-list"></div>
+
+    <div class="center">
+      <button class="btn-ghost" onclick="resetGame()">换一局</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let answer = '', guesses = [], won = false, loading = false;
+
+const WORDS = ['月亮','太阳','星空','海洋','森林','城市','音乐','爱情','友情','梦想','花朵','蝴蝶','彩虹','雪花','火焰','河流','山峰','草地','蜜蜂','孤独','自由','希望','记忆','时间','秘密','勇气','温暖','寒冷','黑暗','光明','智慧','力量','平静','喜悦','忧愁','春天','冬日','秋风','夏夜','微风','浪花','沙漠','冰川','云雾','彼岸','故乡','归途','迷失','觉醒'];
+
+function startGame() { answer = WORDS[Math.floor(Math.random() * WORDS.length)]; initGame(); }
+
+function startGameCustom() {
+  const val = document.getElementById('customAnswer').value.trim();
+  if (val.length !== 2) { showError('请输入恰好两个字的词'); return; }
+  answer = val; initGame();
+}
+
+function initGame() {
+  guesses = []; won = false; loading = false;
+  document.getElementById('setupCard').style.display = 'none';
+  document.getElementById('gameArea').style.display = 'block';
+  document.getElementById('winBanner').style.display = 'none';
+  document.getElementById('guessList').innerHTML = '';
+  document.getElementById('guessInput').value = '';
+  document.getElementById('guessInput').disabled = false;
+  document.getElementById('guessBtn').disabled = false;
+  document.getElementById('errorMsg').style.display = 'none';
+  document.getElementById('guessInput').focus();
+  updateCount();
+}
+
+function resetGame() {
+  document.getElementById('setupCard').style.display = 'block';
+  document.getElementById('gameArea').style.display = 'none';
+  document.getElementById('customAnswer').value = '';
+  answer = ''; guesses = [];
+}
+
+function updateCount() {
+  document.getElementById('countBadge').textContent = `第 ${guesses.length + 1} 次`;
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
+}
+
+async function submitGuess() {
+  if (loading || won) return;
+  const input = document.getElementById('guessInput');
+  const word = input.value.trim();
+  if (word.length !== 2) { showError('请输入两个字的词'); return; }
+  if (guesses.find(g => g.word === word)) { showError('已经猜过这个词了'); return; }
+
+  loading = true;
+  document.getElementById('guessBtn').disabled = true;
+  input.value = '';
+
+  const listEl = document.getElementById('guessList');
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'loading-row';
+  loadingEl.innerHTML = `<div class="spinner"></div><span>正在感应「${word}」…</span>`;
+  listEl.prepend(loadingEl);
+
+  try {
+    const resp = await fetch('/api/similarity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guess: word, target: answer }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const pct = data.score ?? 0;
+
+    loadingEl.remove();
+    guesses.push({ word, pct });
+    guesses.sort((a, b) => b.pct - a.pct);
+    renderGuesses();
+
+    if (word === answer || pct >= 99) {
+      showWin(guesses.length); won = true;
+    } else {
+      updateCount();
+      document.getElementById('guessInput').focus();
+    }
+  } catch(e) {
+    loadingEl.remove();
+    showError('请求失败，请重试');
+  }
+
+  loading = false;
+  if (!won) document.getElementById('guessBtn').disabled = false;
+}
+
+function barColor(pct) {
+  if (pct >= 80) return '#1a7a4a';
+  if (pct >= 50) return '#b07010';
+  if (pct >= 25) return '#2a70c0';
+  return '#999';
+}
+
+function renderGuesses() {
+  const listEl = document.getElementById('guessList');
+  listEl.innerHTML = '';
+  guesses.forEach((g, i) => {
+    const c = barColor(g.pct);
+    const row = document.createElement('div');
+    row.className = 'guess-row';
+    row.innerHTML = `
+      <span class="guess-rank">${i + 1}</span>
+      <span class="guess-word">${g.word}</span>
+      <div class="bar-wrap"><div class="bar" style="width:${g.pct}%;background:${c}"></div></div>
+      <span class="guess-pct" style="color:${c}">${g.pct}%</span>`;
+    listEl.appendChild(row);
+  });
+}
+
+function showWin(count) {
+  const b = document.getElementById('winBanner');
+  b.style.display = 'block';
+  b.innerHTML = `<div class="win-card"><div class="win-word">${answer} ✓</div><div class="win-msg">猜对了！共猜了 ${count} 次</div></div>`;
+  document.getElementById('guessBtn').disabled = true;
+  document.getElementById('guessInput').disabled = true;
+  document.getElementById('statusText').textContent = '游戏结束';
+  document.getElementById('countBadge').textContent = `共 ${count} 次`;
+}
+</script>
+</body>
+</html>
