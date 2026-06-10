@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
   const { guess, target } = req.body;
   if (!guess || !target) return res.status(400).json({ error: 'Missing params' });
-  if (guess === target) return res.status(200).json({ score: 100 });
+  if (guess === target) return res.status(200).json({ score: 100, isSynonym: true });
 
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -17,11 +17,14 @@ export default async function handler(req, res) {
     },
     body: JSON.stringify({
       model: 'llama-3.1-8b-instant',
-      max_tokens: 10,
+      max_tokens: 20,
       messages: [
         {
           role: 'system',
-          content: '你是语义关联度计算器。输入两个中文词，只输出0-100的整数表示语义关联度。100=同义，80-99=强关联，50-79=中等，20-49=弱，0-19=无关。只输出数字，不要任何其他内容。'
+          content: `你是语义关联度计算器。输入两个中文词，用JSON格式返回：{"score": 数字, "isSynonym": 布尔值}。
+score是0-100的整数，表示语义关联度：100=完全相同，80-99=强关联，50-79=中等，20-49=弱，0-19=无关。
+isSynonym为true表示两词是同义词或同一事物的不同叫法（如番茄/西红柿、飞机/航班、手机/手提），false表示非同义词。
+只输出JSON，不要任何其他内容。`
         },
         { role: 'user', content: `${guess} ${target}` }
       ],
@@ -29,7 +32,14 @@ export default async function handler(req, res) {
   });
 
   const data = await response.json();
-  const text = data?.choices?.[0]?.message?.content?.trim() ?? '0';
-  const score = Math.min(100, Math.max(0, parseInt(text) || 0));
-  return res.status(200).json({ score });
+  const text = data?.choices?.[0]?.message?.content?.trim() ?? '{"score":0,"isSynonym":false}';
+  try {
+    const parsed = JSON.parse(text);
+    const score = Math.min(100, Math.max(0, parseInt(parsed.score) || 0));
+    const isSynonym = Boolean(parsed.isSynonym);
+    return res.status(200).json({ score, isSynonym });
+  } catch {
+    const num = parseInt(text);
+    return res.status(200).json({ score: isNaN(num) ? 0 : Math.min(100, Math.max(0, num)), isSynonym: false });
+  }
 }
