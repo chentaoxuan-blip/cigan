@@ -59,6 +59,18 @@
   .setup-row { margin-bottom: 10px; }
   .center { text-align: center; margin-top: 1rem; }
   .divider { font-size: 11px; color: #bbb; text-align: center; margin: 12px 0 10px; }
+  .surrender-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 1rem; }
+  .btn-surrender { height: 40px; padding: 0 18px; background: transparent; border: 1.5px solid #e0a0a0; border-radius: 8px; font-size: 13px; cursor: pointer; font-family: inherit; color: #c0392b; transition: all 0.15s; }
+  .btn-surrender:hover { background: #fff0ee; border-color: #c0392b; }
+  .taunt { font-size: 22px; cursor: default; animation: taunt 1.5s ease-in-out infinite; display: inline-block; }
+  @keyframes taunt {
+    0%   { transform: rotate(-10deg) scale(1); }
+    20%  { transform: rotate(10deg) scale(1.15); }
+    40%  { transform: rotate(-8deg) scale(1); }
+    60%  { transform: rotate(12deg) scale(1.2); }
+    80%  { transform: rotate(-5deg) scale(1.05); }
+    100% { transform: rotate(-10deg) scale(1); }
+  }
 </style>
 </head>
 <body>
@@ -120,6 +132,11 @@
 
     <div id="guessList" class="guess-list"></div>
     <div class="center"><button class="btn-ghost" onclick="resetGame()">换一局</button></div>
+    <div class="surrender-row" id="surrenderRow" style="display:none">
+      <span class="taunt" id="tauntEmoji">😝</span>
+      <button class="btn-surrender" onclick="surrender()">我认输了</button>
+      <span class="taunt" id="tauntEmoji2">🤪</span>
+    </div>
   </div>
 </div>
 
@@ -128,6 +145,35 @@ let answer = '', guesses = [], won = false, loading = false;
 let difficulty = 'easy';
 let timerInterval = null, timeLeft = 180;
 let hintShown = false;
+let tauntInterval = null;
+
+const TAUNTS = ['😝','🤪','😈','👻','🤡','😏','🙃','😜','👹','💀'];
+let tauntIdx = 0;
+
+function rotateTaunts() {
+  tauntIdx = (tauntIdx + 1) % TAUNTS.length;
+  const a = document.getElementById('tauntEmoji');
+  const b = document.getElementById('tauntEmoji2');
+  if (a) a.textContent = TAUNTS[tauntIdx];
+  if (b) b.textContent = TAUNTS[(tauntIdx + 3) % TAUNTS.length];
+}
+
+function showSurrenderBtn() {
+  const row = document.getElementById('surrenderRow');
+  if (row) row.style.display = 'flex';
+  if (!tauntInterval) tauntInterval = setInterval(rotateTaunts, 800);
+}
+
+function hideSurrenderBtn() {
+  const row = document.getElementById('surrenderRow');
+  if (row) row.style.display = 'none';
+  clearInterval(tauntInterval);
+  tauntInterval = null;
+}
+
+function surrender() {
+  endGame(false, '主动认输，');
+}
 
 // 简单模式词库：冷门词，包括罕见水果、冷僻事物、不常用词
 const WORDS_EASY = [
@@ -160,7 +206,7 @@ const WORDS_NORMAL = [
 
 const DIFF_CONFIG = {
   easy:   { words: WORDS_EASY,   maxGuesses: Infinity, timer: false, categoryHint: true,  clueHint: false, clueAt: 0   },
-  normal: { words: WORDS_NORMAL, maxGuesses: Infinity, timer: false, categoryHint: false, clueHint: true,  clueAt: 30  },
+  normal: { words: WORDS_NORMAL, maxGuesses: Infinity, timer: false, categoryHint: false, clueHint: true,  clueAt: 20  },
   hard:   { words: WORDS_NORMAL, maxGuesses: 50,       timer: false, categoryHint: false, clueHint: false, clueAt: 0   },
   hell:   { words: WORDS_NORMAL, maxGuesses: 20,       timer: true,  categoryHint: false, clueHint: false, clueAt: 0, seconds: 180 },
 };
@@ -198,6 +244,7 @@ function initGame() {
   document.getElementById('guessBtn').disabled = false;
   document.getElementById('inputCard').style.display = 'block';
   document.getElementById('errorMsg').style.display = 'none';
+  hideSurrenderBtn();
 
   if (cfg.timer) {
     timeLeft = cfg.seconds;
@@ -296,6 +343,10 @@ async function submitGuess() {
         hintShown = true;
         fetchHint('clue');
       }
+      // 超过25次显示投降按钮
+      if (guesses.length >= 25 && !won) {
+        showSurrenderBtn();
+      }
       if (cfg.maxGuesses !== Infinity && guesses.length >= cfg.maxGuesses) {
         endGame(false, `已用完 ${cfg.maxGuesses} 次机会，`);
       } else {
@@ -321,6 +372,7 @@ async function getSimilarity(guess, target) {
 
 function endGame(isWin, msg) {
   clearInterval(timerInterval);
+  hideSurrenderBtn();
   won = true;
   document.getElementById('inputCard').style.display = 'none';
   document.getElementById('guessBtn').disabled = true;
