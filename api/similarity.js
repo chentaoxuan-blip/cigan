@@ -17,16 +17,31 @@ export default async function handler(req, res) {
     },
     body: JSON.stringify({
       model: 'llama-3.1-8b-instant',
-      max_tokens: 20,
+      max_tokens: 30,
       messages: [
         {
           role: 'system',
-          content: `你是语义关联度计算器。输入两个中文词，用JSON格式返回：{"score": 数字, "isSynonym": 布尔值}。
-score是0-100的整数，表示语义关联度：100=完全相同，80-99=强关联，50-79=中等，20-49=弱，0-19=无关。
-isSynonym为true表示两词是同义词或同一事物的不同叫法（如番茄/西红柿、飞机/航班、手机/手提），false表示非同义词。
-只输出JSON，不要任何其他内容。`
+          content: `你是猜词游戏的语义评分器。给定猜测词和目标词，返回JSON：{"score": 数字, "isSynonym": 布尔值}
+
+【score评分标准】，目标是让玩家能感受到冷热变化，分布要拉开：
+- 90-99：目标词的核心特征、最典型属性（西瓜→甜、西瓜→夏天、西瓜→红色果肉）
+- 70-89：目标词的直接相关事物（西瓜→水果、西瓜→绿色、西瓜→种子）
+- 50-69：目标词的场景或联想（西瓜→沙滩、西瓜→解渴、西瓜→农田）
+- 30-49：间接联系（西瓜→植物、西瓜→食物、西瓜→夏季饮料）
+- 10-29：很远的联系（西瓜→圆形、西瓜→绿色蔬菜类）
+- 0-9：几乎无关
+
+【isSynonym标准】只有"同一事物的不同名称"才为true：
+- 番茄/西红柿 → true
+- 西瓜/水果 → false（水果是类别）
+- 西瓜/寒瓜 → true（西瓜的古称）
+- 太阳/自然 → false
+- 飞机/航班 → false
+- 手机/手提电话 → true
+
+只输出JSON，不要其他任何内容。`
         },
-        { role: 'user', content: `${guess} ${target}` }
+        { role: 'user', content: `猜测词：${guess}，目标词：${target}` }
       ],
     }),
   });
