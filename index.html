@@ -60,6 +60,16 @@
   .center { text-align: center; margin-top: 1rem; }
   .divider { font-size: 11px; color: #bbb; text-align: center; margin: 12px 0 10px; }
   .surrender-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 1rem; }
+  .reaction-msg { font-size: 13px; font-weight: 500; text-align: center; min-height: 22px; margin-bottom: 6px; opacity: 0; transform: translateY(-6px); transition: opacity 0.25s, transform 0.25s; color: #555; }
+  /* 弹幕 */
+  .danmaku-wrap { position: relative; height: 80px; overflow: hidden; margin-bottom: 8px; pointer-events: none; }
+  .danmaku-item { position: absolute; right: -100%; white-space: nowrap; font-size: 13px; font-weight: 500; color: #444; background: rgba(255,255,255,0.92); border: 0.5px solid #e0deda; border-radius: 20px; padding: 4px 12px; animation: danmaku-fly 4s linear forwards; }
+  @keyframes danmaku-fly {
+    0%   { right: -100%; opacity: 0; }
+    5%   { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { right: 105%; opacity: 0; }
+  }
   .btn-surrender { height: 40px; padding: 0 18px; background: transparent; border: 1.5px solid #e0a0a0; border-radius: 8px; font-size: 13px; cursor: pointer; font-family: inherit; color: #c0392b; transition: all 0.15s; }
   .btn-surrender:hover { background: #fff0ee; border-color: #c0392b; }
   .taunt { font-size: 22px; cursor: default; animation: taunt 1.5s ease-in-out infinite; display: inline-block; }
@@ -124,9 +134,10 @@
     </div>
     <div id="winBanner" style="display:none"></div>
     <div id="categoryBanner" style="display:none" class="hint-banner hint-category"><span class="hint-icon">🏷️</span><span id="categoryText">正在获取分类…</span></div>
-    <div id="hintBanner" style="display:none" class="hint-banner hint-clue"><span class="hint-icon">💡</span><span id="hintText"></span></div>
+    <div id="hintBanner" style="display:none" class="hint-banner hint-clue"><span class="hint-icon">💡</span><span id="hintText">提示加载中…</span></div>
     <div id="errorMsg" style="display:none" class="error"></div>
 
+    <div class="danmaku-wrap" id="danmakuContainer"></div>
     <div class="card" id="inputCard">
       <div class="row">
         <input type="text" id="guessInput" placeholder="输入词语（最多5字）…" maxlength="5"
@@ -151,7 +162,138 @@ let tauntInterval = null;
 const TAUNTS = ['😝','🤪','😈','👻','🤡','😏','🙃','😜','👹','💀'];
 let tauntIdx = 0;
 
-function rotateTaunts() {
+const REACTIONS = {
+  veryLow: [ // <20%
+    '恭喜你完美避开正确答案喵(￣▽￣;)',
+    '你甚至没进入同一个语境喵(´⊙ω⊙`)',
+    '系统建议你冷静两秒再猜喵(¬_¬ )',
+    '这答案像凌晨三点想出来的喵(；￣Д￣）',
+    '你的思路很自由，答案也很自由喵(´-ω-`)',
+    '再猜下去我要报警了喵(╯°□°）╯︵ ┻━┻',
+    'AI看完开始怀疑训练数据喵(ﾟ⊿ﾟ)',
+    '很难想象你是怎么想到这个的喵(；´Д｀)',
+    '你猜词像在开盲盒喵(ﾟ▽ﾟ*)',
+    '这已经偏到能开新题目了喵(°ー°〃)',
+    '答案：我认识你吗？(・_・;)',
+    '正确答案看到后连夜搬家喵((((；ﾟДﾟ))))',
+    '系统已为你降低期待喵(￣ω￣;)',
+    '你这个命中率适合去抽SSR喵(｡•́︿•̀｡)',
+    '建议把直觉先关掉喵(´；ω；`)',
+  ],
+  low: [ // 20-50%
+    '？？？？？(ﾟ⊿ﾟ)',
+    '你猜的是另一个宇宙吧',
+    '系统已停止思考喵(￣□￣；)',
+    '这俩词真的有关系吗',
+    '方向错得很安心喵(´；ω；`)',
+    'AI看完沉默了喵',
+    '建议重连一下脑回路喵',
+    '外星人可能会赞同你喵',
+    '这不是猜词 是自由发挥喵',
+    '你离答案大概有十万八千里喵',
+  ],
+  mid: [ // 50-70%
+    '嗯……微妙喵(￣ω￣;)',
+    '像，但不完全像喵(¬_¬ )',
+    '你在答案附近乱逛',
+    '有点关系，但不多喵(｡•́︿•̀｡)',
+    '系统陷入沉思……',
+    '这个联想挺神奇喵(´-ω-`)',
+    'AI决定给你一点鼓励喵',
+    '属于擦边球了喵⚾',
+    '你这个思路有点野喵',
+    '不能说错，只能说偏喵',
+  ],
+  hot: [ // 70-90%
+    '有感觉了喵！！(☆▽☆)',
+    '危险危险喵⚠️(；￣Д￣）',
+    '方向对了！继续冲！ヽ(✿ﾟ▽ﾟ)ノ',
+    '再猜一下可能真中了喵(ﾟ▽ﾟ*)',
+    '已经越来越像了喵(｡•̀ᴗ-)✧',
+    '我开始慌了喵(;・∀・)',
+    '这个味儿对了喵(￣▽☆)',
+    '你摸到边缘了喵！',
+    '别猜了我害怕喵(；д；)',
+    '再近一点喵！！',
+  ],
+  win: [ // >=90%
+    '？？？你开挂了吧喵(ﾟДﾟ≡ﾟДﾟ)',
+    '不许偷看答案喵！！(╯°□°）╯︵ ┻━┻',
+    '坏了 被你猜到了喵(;´༎ຶД༎ຶ`)',
+    '等等等等你怎么会知道喵Σ(っ °Д °;)っ',
+    '你这个命中率有点可怕喵(ﾟдﾟ；)',
+    'AI正在破防中……(；´Д｀)',
+    '这都能中？？？(((ﾟДﾟ;)))',
+    '你是不是会读心术喵(´⊙ω⊙`)',
+    '我不理解但我大受震撼喵(๑°⌓°๑)',
+  ],
+  stubborn: [ // 出现投降键后还在猜
+    '要不……算了喵？(´-ω-`)',
+    '系统开始替你着急了喵',
+    '你真的不考虑投降吗喵',
+    '答案都快认识你了喵',
+    '继续猜也是一种勇气喵',
+    'AI建议及时止损喵',
+    '你和正确答案可能没缘分喵',
+    '其实投降按钮也挺可爱的喵',
+    '系统检测到 stubborn 行为喵',
+    '再猜下去我要心疼CPU了喵',
+    '你是不是在和答案赌气喵',
+    '正确答案正在偷偷嘲笑你喵',
+    '要不看看投降按钮呢喵(￣▽￣)',
+    '这个按钮就是为你准备的喵',
+  ],
+  short: [ // 穿插短反馈
+    '啊？(´⊙ω⊙`)', '坏了', '不对劲', '等等？？', '有点东西',
+    '草', '？？？？', '你认真的', '开始危险了', '越来越像了',
+    'AI沉默', '我服了', '别太离谱', '笑死我了', '这都行？？',
+  ],
+  surrender: [ // 投降反馈
+    '终于放弃了喵？(￣▽￣)',
+    '系统：早这样不就好了喵',
+    'AI获得阶段性胜利喵✌️',
+    '你终究还是败给了中文喵',
+    '没事，很多人都死在这题喵',
+    '正确答案终于不用受苦了喵',
+    '系统悬着的心终于死了喵',
+    '你选择了最识时务的方案喵',
+    '至少你知道自己猜不中喵(´-ω-`)',
+    '投降也是一种智慧喵',
+    '恭喜触发『摆烂结局』',
+    '我就知道会这样喵',
+    '辛苦了，虽然一道都没猜对喵',
+  ],
+};
+
+function getRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function getReaction(pct, surrenderVisible) {
+  if (surrenderVisible) return getRandom(REACTIONS.stubborn);
+  if (pct >= 90) return getRandom(REACTIONS.win);
+  if (pct >= 70) return getRandom(REACTIONS.hot);
+  if (pct >= 50) {
+    return Math.random() < 0.3 ? getRandom(REACTIONS.short) : getRandom(REACTIONS.mid);
+  }
+  if (pct >= 20) return getRandom(REACTIONS.low);
+  return getRandom(REACTIONS.veryLow);
+}
+
+// 弹幕系统
+let danmakuContainer = null;
+function initDanmaku() {
+  danmakuContainer = document.getElementById('danmakuContainer');
+}
+
+function fireDanmaku(text) {
+  if (!danmakuContainer) return;
+  const el = document.createElement('div');
+  el.className = 'danmaku-item';
+  el.textContent = text;
+  // 随机垂直位置（顶部区域）
+  el.style.top = (10 + Math.random() * 60) + 'px';
+  danmakuContainer.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
   tauntIdx = (tauntIdx + 1) % TAUNTS.length;
   const a = document.getElementById('tauntEmoji');
   const b = document.getElementById('tauntEmoji2');
@@ -173,7 +315,8 @@ function hideSurrenderBtn() {
 }
 
 function surrender() {
-  endGame(false, '主动认输，');
+  fireDanmaku(getRandom(REACTIONS.surrender));
+  setTimeout(() => endGame(false, '主动认输，'), 600);
 }
 
 // 简单模式词库：冷门词，包括罕见水果、冷僻事物、不常用词
@@ -206,10 +349,10 @@ const WORDS_NORMAL = [
 ];
 
 const DIFF_CONFIG = {
-  easy:   { words: WORDS_EASY,   maxGuesses: Infinity, timer: false, categoryHint: true,  clueHint: false, clueAt: 0   },
-  normal: { words: WORDS_NORMAL, maxGuesses: Infinity, timer: false, categoryHint: false, clueHint: true,  clueAt: 20  },
-  hard:   { words: WORDS_NORMAL, maxGuesses: 50,       timer: false, categoryHint: false, clueHint: false, clueAt: 0   },
-  hell:   { words: WORDS_NORMAL, maxGuesses: 20,       timer: true,  categoryHint: false, clueHint: false, clueAt: 0, seconds: 180 },
+  easy:   { words: WORDS_EASY,   maxGuesses: Infinity, timer: false, clueAt: 0,  timerClue: false },
+  normal: { words: WORDS_NORMAL, maxGuesses: Infinity, timer: false, clueAt: 0,  timerClue: false },
+  hard:   { words: WORDS_NORMAL, maxGuesses: 50,       timer: false, clueAt: 5,  timerClue: false },
+  hell:   { words: WORDS_NORMAL, maxGuesses: 20,       timer: true,  clueAt: 0,  timerClue: true,  seconds: 180 },
 };
 
 function selectDiff(btn) {
@@ -220,7 +363,14 @@ function selectDiff(btn) {
 
 function startGame() {
   const cfg = DIFF_CONFIG[difficulty];
-  answer = cfg.words[Math.floor(Math.random() * cfg.words.length)];
+  let pool;
+  if (difficulty === 'easy') {
+    // 50% 生僻 50% 普通
+    pool = Math.random() < 0.5 ? WORDS_EASY : WORDS_NORMAL;
+  } else {
+    pool = cfg.words;
+  }
+  answer = pool[Math.floor(Math.random() * pool.length)];
   initGame();
 }
 
@@ -251,19 +401,34 @@ function initGame() {
     timeLeft = cfg.seconds;
     document.getElementById('timerBadge').style.display = 'inline-block';
     updateTimer();
-    timerInterval = setInterval(() => { timeLeft--; updateTimer(); if (timeLeft <= 0) endGame(false, '时间到！'); }, 1000);
+    timerInterval = setInterval(() => {
+      timeLeft--;
+      updateTimer();
+      // 地狱模式最后30秒显示线索提示
+      if (cfg.timerClue && !hintShown && timeLeft === 30) {
+        hintShown = true;
+        fetchHint('clue');
+      }
+      if (timeLeft <= 0) endGame(false, '时间到！');
+    }, 1000);
   } else {
     document.getElementById('timerBadge').style.display = 'none';
     clearInterval(timerInterval);
   }
 
-  // 简单模式：游戏开始就显示分类提示
-  if (cfg.categoryHint) {
+  // 简单：蓝框分类 + 黄框线索，都立即显示
+  // 一般：只有黄框线索，立即显示
+  // 困难/地狱：都没有，按条件触发
+  if (difficulty === 'easy') {
     fetchHint('category');
+    fetchHint('clue');
+  } else if (difficulty === 'normal') {
+    fetchHint('clue');
   }
 
   document.getElementById('guessInput').focus();
   updateCount();
+  initDanmaku();
 }
 
 function resetGame() {
@@ -334,13 +499,18 @@ async function submitGuess() {
     guesses.sort((a, b) => b.pct - a.pct);
     renderGuesses();
 
+    // 弹幕反应
+    const surrenderVisible = document.getElementById('surrenderRow').style.display !== 'none';
+    const reaction = getReaction(result.score, surrenderVisible);
+    if (reaction && !result.isSynonym && word !== answer && result.score < 99) fireDanmaku(reaction);
+
     const cfg = DIFF_CONFIG[difficulty];
     if (result.isSynonym || word === answer || result.score >= 99) {
       clearInterval(timerInterval);
       showWin(guesses.length, word, result.isSynonym);
       won = true;
     } else {
-      if (cfg.clueHint && !hintShown && guesses.length >= cfg.clueAt) {
+      if (cfg.clueAt > 0 && !hintShown && guesses.length >= cfg.clueAt) {
         hintShown = true;
         fetchHint('clue');
       }
