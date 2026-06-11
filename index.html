@@ -36,7 +36,9 @@
   .timer-badge.urgent { animation: pulse 0.8s ease-in-out infinite; }
   @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.5} }
   .hint-banner { border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; font-size: 13px; display: flex; gap: 8px; align-items: flex-start; }
-  .hint-category { background: #eef4ff; border: 0.5px solid #b0ccf0; color: #1a4a8a; }
+  .hint-btn-row { display: flex; justify-content: center; margin-bottom: 8px; }
+  .btn-hint { height: 36px; padding: 0 18px; background: #fffbea; border: 1.5px dashed #f0d060; border-radius: 20px; font-size: 13px; cursor: pointer; font-family: inherit; color: #7a5c00; transition: all 0.15s; }
+  .btn-hint:hover { background: #fff3c0; border-color: #d4a000; }
   .hint-clue { background: #fffbea; border: 0.5px solid #f0d060; color: #7a5c00; }
   .hint-icon { flex-shrink: 0; font-size: 15px; }
   .guess-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 1rem; }
@@ -61,14 +63,31 @@
   .divider { font-size: 11px; color: #bbb; text-align: center; margin: 12px 0 10px; }
   .surrender-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 1rem; }
   .reaction-msg { font-size: 13px; font-weight: 500; text-align: center; min-height: 22px; margin-bottom: 6px; opacity: 0; transform: translateY(-6px); transition: opacity 0.25s, transform 0.25s; color: #555; }
-  /* 弹幕 */
-  .danmaku-wrap { position: relative; height: 80px; overflow: hidden; margin-bottom: 8px; pointer-events: none; }
-  .danmaku-item { position: absolute; right: -100%; white-space: nowrap; font-size: 13px; font-weight: 500; color: #444; background: rgba(255,255,255,0.92); border: 0.5px solid #e0deda; border-radius: 20px; padding: 4px 12px; animation: danmaku-fly 4s linear forwards; }
-  @keyframes danmaku-fly {
-    0%   { right: -100%; opacity: 0; }
-    5%   { opacity: 1; }
-    90%  { opacity: 1; }
-    100% { right: 105%; opacity: 0; }
+  /* 弹幕气泡 */
+  .danmaku-wrap { position: relative; height: 120px; margin-bottom: 6px; pointer-events: none; overflow: hidden; }
+  .danmaku-item {
+    position: absolute;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+    background: rgba(255,255,255,0.96);
+    border: 0.5px solid #e0deda;
+    border-radius: 20px;
+    padding: 5px 13px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .danmaku-item.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  .danmaku-item.hide {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+    transition: opacity 0.5s ease, transform 0.5s ease;
   }
   .btn-surrender { height: 40px; padding: 0 18px; background: transparent; border: 1.5px solid #e0a0a0; border-radius: 8px; font-size: 13px; cursor: pointer; font-family: inherit; color: #c0392b; transition: all 0.15s; }
   .btn-surrender:hover { background: #fff0ee; border-color: #c0392b; }
@@ -134,7 +153,10 @@
     </div>
     <div id="winBanner" style="display:none"></div>
     <div id="categoryBanner" style="display:none" class="hint-banner hint-category"><span class="hint-icon">🏷️</span><span id="categoryText">正在获取分类…</span></div>
-    <div id="hintBanner" style="display:none" class="hint-banner hint-clue"><span class="hint-icon">💡</span><span id="hintText">提示加载中…</span></div>
+    <div id="hintBtnRow" style="display:none" class="hint-btn-row">
+      <button class="btn-hint" id="hintBtn" onclick="revealHint()">💡 点我获取提示</button>
+    </div>
+    <div id="hintBanner" style="display:none" class="hint-banner hint-clue"><span class="hint-icon">💡</span><span id="hintText"></span></div>
     <div id="errorMsg" style="display:none" class="error"></div>
 
     <div class="danmaku-wrap" id="danmakuContainer"></div>
@@ -266,16 +288,29 @@ const REACTIONS = {
 };
 
 function getRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function getRandomN(arr, n) {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, Math.min(n, shuffled.length));
+}
 
-function getReaction(pct, surrenderVisible) {
-  if (surrenderVisible) return getRandom(REACTIONS.stubborn);
-  if (pct >= 90) return getRandom(REACTIONS.win);
-  if (pct >= 70) return getRandom(REACTIONS.hot);
-  if (pct >= 50) {
-    return Math.random() < 0.3 ? getRandom(REACTIONS.short) : getRandom(REACTIONS.mid);
+function getReactions(pct, surrenderVisible) {
+  // 返回2-4条不重复的弹幕
+  let pool;
+  if (surrenderVisible) {
+    pool = [...REACTIONS.stubborn];
+  } else if (pct >= 90) {
+    pool = [...REACTIONS.win, ...REACTIONS.short.slice(0,5)];
+  } else if (pct >= 70) {
+    pool = [...REACTIONS.hot, ...REACTIONS.short.slice(0,4)];
+  } else if (pct >= 50) {
+    pool = [...REACTIONS.mid, ...REACTIONS.short];
+  } else if (pct >= 20) {
+    pool = [...REACTIONS.low, ...REACTIONS.short.slice(0,5)];
+  } else {
+    pool = [...REACTIONS.veryLow, ...REACTIONS.short.slice(0,3)];
   }
-  if (pct >= 20) return getRandom(REACTIONS.low);
-  return getRandom(REACTIONS.veryLow);
+  const count = 2 + Math.floor(Math.random() * 3); // 2-4条
+  return getRandomN(pool, count);
 }
 
 // 弹幕系统
@@ -284,15 +319,47 @@ function initDanmaku() {
   danmakuContainer = document.getElementById('danmakuContainer');
 }
 
-function fireDanmaku(text) {
+// 预定义散布位置，避免重叠：3行4列格子随机取
+const BUBBLE_SLOTS = [
+  {left:'2%',  top:'8px'}, {left:'28%', top:'8px'}, {left:'55%', top:'8px'}, {left:'72%', top:'8px'},
+  {left:'5%',  top:'45px'},{left:'32%', top:'45px'},{left:'58%', top:'45px'},{left:'75%', top:'45px'},
+  {left:'10%', top:'82px'},{left:'38%', top:'82px'},{left:'62%', top:'82px'},{left:'80%', top:'82px'},
+];
+let usedSlots = [];
+
+function getSlot() {
+  const available = BUBBLE_SLOTS.filter((_, i) => !usedSlots.includes(i));
+  if (available.length === 0) { usedSlots = []; return BUBBLE_SLOTS[0]; }
+  const idx = BUBBLE_SLOTS.indexOf(available[Math.floor(Math.random() * available.length)]);
+  usedSlots.push(idx);
+  return BUBBLE_SLOTS[idx];
+}
+
+function fireDanmaku(text, delayMs = 0) {
   if (!danmakuContainer) return;
-  const el = document.createElement('div');
-  el.className = 'danmaku-item';
-  el.textContent = text;
-  // 随机垂直位置（顶部区域）
-  el.style.top = (10 + Math.random() * 60) + 'px';
-  danmakuContainer.appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+  setTimeout(() => {
+    const el = document.createElement('div');
+    el.className = 'danmaku-item';
+    el.textContent = text;
+    const slot = getSlot();
+    el.style.left = slot.left;
+    el.style.top = slot.top;
+    danmakuContainer.appendChild(el);
+    // 浮现
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+    // 随机停留 2-4秒后消失
+    const stay = 2000 + Math.random() * 2000;
+    setTimeout(() => {
+      el.classList.remove('show');
+      el.classList.add('hide');
+      setTimeout(() => { el.remove(); usedSlots = usedSlots.filter(i => BUBBLE_SLOTS[i] !== slot); }, 600);
+    }, stay);
+  }, delayMs);
+}
+
+function fireBurst(texts) {
+  // 2-4条，每条间隔100-200ms错开
+  texts.forEach((text, i) => fireDanmaku(text, i * 150));
 }
 
 function rotateTaunts() {
@@ -321,33 +388,44 @@ function surrender() {
   setTimeout(() => endGame(false, '主动认输，'), 600);
 }
 
-// 简单模式词库：冷门词，包括罕见水果、冷僻事物、不常用词
+// 简单模式词库：冷门但有辨识度，词义清晰不模糊
 const WORDS_EASY = [
-  // 罕见水果
-  '牛油果','莲雾','火龙果','番石榴','杨桃','蛋黄果','山竹','榴莲','释迦','木瓜',
-  '刺梨','枇杷','杨梅','菠萝蜜','人参果','黄皮果','蒲桃','毛叶枣','芭乐','红毛丹',
-  // 冷门动物
-  '穿山甲','貘','蜥蜴','鸭嘴兽','土豚','儒艮','雪豹','懒熊','狞猫','薮猫',
-  // 冷门植物
-  '捕蝇草','猪笼草','箭竹','芦荟','薰衣草','迷迭香','罗勒','紫苏','艾草','茉莉',
-  // 抽象/情感
-  '怅惘','惆怅','彷徨','踌躇','怜悯','敬畏','羞赧','愕然','惊愕','恍惚',
-  // 场景/氛围
-  '暮色','晨曦','霞光','薄雾','幽谷','深渊','悬崖','荒野','废墟','密林',
-  // 动作
-  '蜿蜒','盘旋','飘荡','摇曳','涌动','蔓延','消融','凝固','迸裂','坠落',
+  // 罕见水果（每个味道/外形都很不同）
+  '牛油果','莲雾','火龙果','番石榴','杨桃','山竹','榴莲','枇杷','菠萝蜜','红毛丹',
+  '刺梨','杨梅','人参果','芭乐','蒲桃','释迦','蛋黄果','木奶果','黄晶果','神秘果',
+  // 冷门动物（形态差异大）
+  '穿山甲','貘','鸭嘴兽','儒艮','雪豹','土豚','狞猫','蜜獾','犰狳','负鼠',
+  // 冷门植物（气味/形态特殊）
+  '捕蝇草','猪笼草','薰衣草','迷迭香','罗勒','紫苏','艾草','茉莉','含羞草','昙花',
+  // 具体场景/氛围（画面感强）
+  '暮色','晨曦','霞光','薄雾','悬崖','荒野','废墟','密林','沼泽','峭壁',
+  // 具体动作（动作明确）
+  '蜿蜒','盘旋','摇曳','蔓延','凝固','迸裂','坠落','翻滚','穿梭','缠绕',
+  // 具体物件
+  '罗盘','沙漏','风筝','灯塔','地图','骰子','羽毛','贝壳','蜡烛','指南针',
 ];
 
-// 普通/困难/地狱模式词库
+// 普通/困难/地狱模式词库：常见但词义独立、不互相混淆
 const WORDS_NORMAL = [
-  '月亮','太阳','星空','海洋','森林','河流','山峰','草地','沙漠','冰川','云雾','彩虹','雪花','火焰','微风',
-  '爱情','友情','孤独','自由','希望','记忆','秘密','勇气','温暖','寒冷','梦想','忧愁','喜悦','平静','迷失',
-  '奔跑','飞翔','漂浮','沉默','歌唱','哭泣','微笑','拥抱','放弃','坚持','融化','消失','绽放','凋落','呼吸',
-  '巨大','渺小','漆黑','洁白','炽热','冰冷','柔软','坚硬','甜蜜','苦涩','沉重','轻盈','模糊','清晰','鲜艳',
-  '城市','故乡','春天','冬日','秋风','夏夜','黎明','黄昏','午夜','街道','海滩','山顶','图书馆','咖啡馆','游乐园',
-  '番茄','苹果','香蕉','西瓜','草莓','巧克力','冰淇淋','咖啡','茶叶','火锅',
-  '蝴蝶','蜜蜂','老虎','海豚','猫咪','狐狸','熊猫','钢琴','吉他','足球',
-  '智慧','力量','黑暗','光明','时间','宇宙','镜子','影子','烟火','迷宫','钥匙','思念','觉醒',
+  // 自然（各有特色，不重叠）
+  '月亮','太阳','彩虹','雪花','火焰','微风','闪电','海浪','沙漠','冰川',
+  '星空','森林','河流','山峰','草地','云朵','瀑布','峡谷','珊瑚','极光',
+  // 情感（每个都独立）
+  '嫉妒','敬畏','怜悯','羞耻','愤怒','喜悦','悲伤','孤独','温柔','勇气',
+  // 抽象概念（清晰可辨）
+  '自由','秘密','记忆','时间','命运','信念','边界','规则','起点','终点',
+  // 动作（动作感强，互不混淆）
+  '奔跑','飞翔','沉默','歌唱','拥抱','凋落','绽放','呼吸','跳跃','漂流',
+  // 形容（感官明确）
+  '漆黑','炽热','冰冷','柔软','坚硬','甜蜜','苦涩','轻盈','黏稠','锋利',
+  // 场景（画面独特）
+  '故乡','黎明','黄昏','午夜','街道','海滩','图书馆','游乐园','废弃站','天台',
+  // 食物（各不相同）
+  '西瓜','草莓','巧克力','冰淇淋','咖啡','火锅','寿司','抹茶','奶酪','肉桂',
+  // 动物（形态各异）
+  '蝴蝶','海豚','老虎','狐狸','熊猫','蜂鸟','章鱼','萤火虫','变色龙','企鹅',
+  // 物件（用途明确）
+  '镜子','钥匙','指南针','沙漏','灯塔','降落伞','望远镜','留声机','烟花','风筝',
 ];
 
 const DIFF_CONFIG = {
@@ -390,6 +468,7 @@ function initGame() {
   document.getElementById('gameArea').style.display = 'block';
   document.getElementById('winBanner').style.display = 'none';
   document.getElementById('categoryBanner').style.display = 'none';
+  document.getElementById('hintBtnRow').style.display = 'none';
   document.getElementById('hintBanner').style.display = 'none';
   document.getElementById('guessList').innerHTML = '';
   document.getElementById('guessInput').value = '';
@@ -465,16 +544,31 @@ async function fetchHint(type) {
       text.textContent = data.hint;
     } catch { text.textContent = '这是一个有趣的词'; }
   } else {
-    const el = document.getElementById('hintBanner');
-    const text = document.getElementById('hintText');
-    text.textContent = '正在生成提示…';
-    el.style.display = 'flex';
-    try {
-      const resp = await fetch('/api/hint', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ answer, type: 'clue' }) });
-      const data = await resp.json();
-      text.textContent = data.hint;
-    } catch { text.textContent = '继续加油，答案就在不远处'; }
+    // 只显示按钮，不直接显示内容
+    document.getElementById('hintBtnRow').style.display = 'flex';
   }
+}
+
+const HINT_TAUNTS = [
+  '哦？需要提示了喵(￣▽￣)', '连提示都要看了喵(¬_¬ )',
+  '承认需要帮助了喵(´-ω-`)', '好吧给你一点点喵(；´Д｀)',
+  '这都猜不到喵？(｡•́︿•̀｡)', '提示使用者！(ﾟ▽ﾟ*)',
+  '要靠提示的人喵www', 'AI叹了口气喵……',
+];
+
+async function revealHint() {
+  document.getElementById('hintBtnRow').style.display = 'none';
+  const el = document.getElementById('hintBanner');
+  const text = document.getElementById('hintText');
+  text.textContent = '正在生成提示…';
+  el.style.display = 'flex';
+  // 触发嘲讽弹幕
+  fireDanmaku(HINT_TAUNTS[Math.floor(Math.random() * HINT_TAUNTS.length)]);
+  try {
+    const resp = await fetch('/api/hint', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ answer, type: 'clue' }) });
+    const data = await resp.json();
+    text.textContent = data.hint;
+  } catch { text.textContent = '继续加油，答案就在不远处'; }
 }
 
 async function submitGuess() {
@@ -501,10 +595,19 @@ async function submitGuess() {
     guesses.sort((a, b) => b.pct - a.pct);
     renderGuesses();
 
-    // 弹幕反应
+    // 0.5秒后触发2-4条弹幕
     const surrenderVisible = document.getElementById('surrenderRow').style.display !== 'none';
-    const reaction = getReaction(result.score, surrenderVisible);
-    if (reaction && !result.isSynonym && word !== answer && result.score < 99) fireDanmaku(reaction);
+    if (!result.isSynonym && word !== answer && result.score < 99) {
+      setTimeout(() => {
+        const count = 2 + Math.floor(Math.random() * 3); // 2-4条
+        const msgs = [];
+        for (let i = 0; i < count; i++) {
+          const r = getReaction(result.score, surrenderVisible);
+          if (r && !msgs.includes(r)) msgs.push(r);
+        }
+        fireBurst(msgs);
+      }, 500);
+    }
 
     const cfg = DIFF_CONFIG[difficulty];
     if (result.isSynonym || word === answer || result.score >= 99) {
