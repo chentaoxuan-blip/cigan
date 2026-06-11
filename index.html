@@ -39,6 +39,8 @@
   .hint-btn-row { display: flex; justify-content: center; margin-bottom: 8px; }
   .btn-hint { height: 36px; padding: 0 18px; background: #fffbea; border: 1.5px dashed #f0d060; border-radius: 20px; font-size: 13px; cursor: pointer; font-family: inherit; color: #7a5c00; transition: all 0.15s; }
   .btn-hint:hover { background: #fff3c0; border-color: #d4a000; }
+  .btn-hint-category { background: #eef4ff; border-color: #b0ccf0; color: #1a4a8a; }
+  .btn-hint-category:hover { background: #ddeeff; border-color: #7aaae0; }
   .hint-clue { background: #fffbea; border: 0.5px solid #f0d060; color: #7a5c00; }
   .hint-icon { flex-shrink: 0; font-size: 15px; }
   .guess-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 1rem; }
@@ -152,9 +154,12 @@
       <span class="taunt" id="tauntEmoji2">🤪</span>
     </div>
     <div id="winBanner" style="display:none"></div>
-    <div id="categoryBanner" style="display:none" class="hint-banner hint-category"><span class="hint-icon">🏷️</span><span id="categoryText">正在获取分类…</span></div>
+    <div id="categoryBtnRow" style="display:none" class="hint-btn-row">
+      <button class="btn-hint btn-hint-category" onclick="revealCategory()">🏷️ 点我获取分类提示</button>
+    </div>
+    <div id="categoryBanner" style="display:none" class="hint-banner hint-category"><span class="hint-icon">🏷️</span><span id="categoryText"></span></div>
     <div id="hintBtnRow" style="display:none" class="hint-btn-row">
-      <button class="btn-hint" id="hintBtn" onclick="revealHint()">💡 点我获取提示</button>
+      <button class="btn-hint" onclick="revealHint()">💡 点我获取线索提示</button>
     </div>
     <div id="hintBanner" style="display:none" class="hint-banner hint-clue"><span class="hint-icon">💡</span><span id="hintText"></span></div>
     <div id="errorMsg" style="display:none" class="error"></div>
@@ -467,6 +472,7 @@ function initGame() {
   document.getElementById('setupCard').style.display = 'none';
   document.getElementById('gameArea').style.display = 'block';
   document.getElementById('winBanner').style.display = 'none';
+  document.getElementById('categoryBtnRow').style.display = 'none';
   document.getElementById('categoryBanner').style.display = 'none';
   document.getElementById('hintBtnRow').style.display = 'none';
   document.getElementById('hintBanner').style.display = 'none';
@@ -534,19 +540,31 @@ function showError(msg) {
 
 async function fetchHint(type) {
   if (type === 'category') {
-    const el = document.getElementById('categoryBanner');
-    const text = document.getElementById('categoryText');
-    text.textContent = '正在获取分类提示…';
-    el.style.display = 'flex';
-    try {
-      const resp = await fetch('/api/hint', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ answer, type: 'category' }) });
-      const data = await resp.json();
-      text.textContent = data.hint;
-    } catch { text.textContent = '这是一个有趣的词'; }
+    document.getElementById('categoryBtnRow').style.display = 'flex';
   } else {
-    // 只显示按钮，不直接显示内容
     document.getElementById('hintBtnRow').style.display = 'flex';
   }
+}
+
+const CATEGORY_TAUNTS = [
+  '要看分类了喵？(￣▽￣)', '靠分类提示也算赢喵(¬_¬ )',
+  '好吧给你个方向喵(´-ω-`)', '连分类都要看喵(｡•́︿•̀｡)',
+  '提示使用+1喵www', 'AI叹了口气喵……',
+  '好吧，给你一点点喵', '你需要这个吗真的喵',
+];
+
+async function revealCategory() {
+  document.getElementById('categoryBtnRow').style.display = 'none';
+  const el = document.getElementById('categoryBanner');
+  const text = document.getElementById('categoryText');
+  text.textContent = '正在获取分类…';
+  el.style.display = 'flex';
+  fireDanmaku(getRandom(CATEGORY_TAUNTS));
+  try {
+    const resp = await fetch('/api/hint', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ answer, type: 'category' }) });
+    const data = await resp.json();
+    text.textContent = data.hint;
+  } catch { text.textContent = '这是一个有趣的词'; }
 }
 
 const HINT_TAUNTS = [
