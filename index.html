@@ -294,6 +294,8 @@ function fireDanmaku(text) {
   danmakuContainer.appendChild(el);
   setTimeout(() => el.remove(), 4000);
 }
+
+function rotateTaunts() {
   tauntIdx = (tauntIdx + 1) % TAUNTS.length;
   const a = document.getElementById('tauntEmoji');
   const b = document.getElementById('tauntEmoji2');
