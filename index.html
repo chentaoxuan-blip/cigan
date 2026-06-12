@@ -633,7 +633,7 @@ async function submitGuess() {
         fetchHint('clue');
       }
       // 简单模式20次、其他25次显示投降按钮
-      const surrenderAt = difficulty === 'easy' ? 20 : 25;
+      const surrenderAt = 5;
       if (guesses.length >= surrenderAt && !won) {
         showSurrenderBtn();
       }
