@@ -66,21 +66,22 @@
   .surrender-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 1rem; }
   .reaction-msg { font-size: 13px; font-weight: 500; text-align: center; min-height: 22px; margin-bottom: 6px; opacity: 0; transform: translateY(-6px); transition: opacity 0.25s, transform 0.25s; color: #555; }
   /* 弹幕气泡 */
-  .danmaku-wrap { position: relative; height: 120px; margin-bottom: 6px; pointer-events: none; overflow: hidden; }
+  .danmaku-wrap { position: relative; height: 130px; margin-bottom: 6px; pointer-events: none; overflow: visible; }
   .danmaku-item {
     position: absolute;
     white-space: nowrap;
     font-size: 13px;
     font-weight: 500;
     color: #333;
-    background: rgba(255,255,255,0.96);
+    background: rgba(255,255,255,0.97);
     border: 0.5px solid #e0deda;
     border-radius: 20px;
     padding: 5px 13px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.09);
     opacity: 0;
-    transform: translateY(8px) scale(0.92);
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transform: translateY(10px) scale(0.9);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    z-index: 10;
   }
   .danmaku-item.show {
     opacity: 1;
@@ -88,8 +89,8 @@
   }
   .danmaku-item.hide {
     opacity: 0;
-    transform: translateY(-12px) scale(0.95);
-    transition: opacity 0.5s ease, transform 0.5s ease;
+    transform: translateY(-14px) scale(0.94);
+    transition: opacity 0.6s ease, transform 0.6s ease;
   }
   .btn-surrender { height: 40px; padding: 0 18px; background: transparent; border: 1.5px solid #e0a0a0; border-radius: 8px; font-size: 13px; cursor: pointer; font-family: inherit; color: #c0392b; transition: all 0.15s; }
   .btn-surrender:hover { background: #fff0ee; border-color: #c0392b; }
@@ -324,20 +325,21 @@ function initDanmaku() {
   danmakuContainer = document.getElementById('danmakuContainer');
 }
 
-// 预定义散布位置，避免重叠：3行4列格子随机取
+// 预定义散布位置（像素），3行布局
 const BUBBLE_SLOTS = [
-  {left:'2%',  top:'8px'}, {left:'28%', top:'8px'}, {left:'55%', top:'8px'}, {left:'72%', top:'8px'},
-  {left:'5%',  top:'45px'},{left:'32%', top:'45px'},{left:'58%', top:'45px'},{left:'75%', top:'45px'},
-  {left:'10%', top:'82px'},{left:'38%', top:'82px'},{left:'62%', top:'82px'},{left:'80%', top:'82px'},
+  {left:0,   top:4},  {left:130, top:4},  {left:270, top:4},
+  {left:60,  top:46}, {left:200, top:46},
+  {left:0,   top:88}, {left:150, top:88}, {left:290, top:88},
 ];
-let usedSlots = [];
+let usedSlots = new Set();
 
 function getSlot() {
-  const available = BUBBLE_SLOTS.filter((_, i) => !usedSlots.includes(i));
-  if (available.length === 0) { usedSlots = []; return BUBBLE_SLOTS[0]; }
-  const idx = BUBBLE_SLOTS.indexOf(available[Math.floor(Math.random() * available.length)]);
-  usedSlots.push(idx);
-  return BUBBLE_SLOTS[idx];
+  const available = BUBBLE_SLOTS.map((s,i)=>i).filter(i => !usedSlots.has(i));
+  if (available.length === 0) { usedSlots.clear(); }
+  const choices = available.length > 0 ? available : BUBBLE_SLOTS.map((_,i)=>i);
+  const idx = choices[Math.floor(Math.random() * choices.length)];
+  usedSlots.add(idx);
+  return { slot: BUBBLE_SLOTS[idx], idx };
 }
 
 function fireDanmaku(text, delayMs = 0) {
@@ -346,18 +348,16 @@ function fireDanmaku(text, delayMs = 0) {
     const el = document.createElement('div');
     el.className = 'danmaku-item';
     el.textContent = text;
-    const slot = getSlot();
-    el.style.left = slot.left;
-    el.style.top = slot.top;
+    const { slot, idx } = getSlot();
+    el.style.left = slot.left + 'px';
+    el.style.top = slot.top + 'px';
     danmakuContainer.appendChild(el);
-    // 浮现
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
-    // 随机停留 2-4秒后消失
     const stay = 2000 + Math.random() * 2000;
     setTimeout(() => {
       el.classList.remove('show');
       el.classList.add('hide');
-      setTimeout(() => { el.remove(); usedSlots = usedSlots.filter(i => BUBBLE_SLOTS[i] !== slot); }, 600);
+      setTimeout(() => { el.remove(); usedSlots.delete(idx); }, 700);
     }, stay);
   }, delayMs);
 }
@@ -617,12 +617,7 @@ async function submitGuess() {
     const surrenderVisible = document.getElementById('surrenderRow').style.display !== 'none';
     if (!result.isSynonym && word !== answer && result.score < 99) {
       setTimeout(() => {
-        const count = 2 + Math.floor(Math.random() * 3); // 2-4条
-        const msgs = [];
-        for (let i = 0; i < count; i++) {
-          const r = getReaction(result.score, surrenderVisible);
-          if (r && !msgs.includes(r)) msgs.push(r);
-        }
+        const msgs = getReactions(result.score, surrenderVisible);
         fireBurst(msgs);
       }, 500);
     }
